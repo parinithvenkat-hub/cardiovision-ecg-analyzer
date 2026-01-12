@@ -16,18 +16,10 @@ st.info("🔄 Loading AI model, please wait...")
 
 @st.cache_resource
 def load_model():
-    try:
-        model = tf.keras.models.load_model("ecg_brain.h5", compile=False)
-        return model
-    except Exception as e:
-        st.error("❌ Model failed to load")
-        st.exception(e)
-        return None
+    model = tf.keras.models.load_model("ecg_brain.h5", compile=False)
+    return model
 
 model = load_model()
-
-if model is None:
-    st.stop()
 
 uploaded = st.file_uploader(
     "Upload ECG image (PNG / JPG)",
@@ -36,12 +28,11 @@ uploaded = st.file_uploader(
 
 if uploaded:
     image = Image.open(uploaded).convert("RGB")
-st.image(image, caption="Uploaded ECG", width=400)
+    st.image(image, caption="Uploaded ECG", width=400)
 
-img = ImageOps.fit(image, (224, 224))   # 🔥 FIXED SIZE
-arr = np.array(img) / 255.0
-arr = np.expand_dims(arr, axis=0)       # (1, 224, 224, 3)
-
+    img = ImageOps.fit(image, (224, 224))
+    arr = np.array(img) / 255.0
+    arr = np.expand_dims(arr, axis=0)
 
     preds = model.predict(arr)[0]
     labels = ["Normal", "Myocardial Infarction (MI)", "Post-MI"]
@@ -61,4 +52,3 @@ arr = np.expand_dims(arr, axis=0)       # (1, 224, 224, 3)
 
 st.markdown("---")
 st.caption("⚠️ Educational use only. Not a medical diagnosis.")
-# (paste the full app.py code I gave you earlier here)

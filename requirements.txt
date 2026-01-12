@@ -1,5 +1,7 @@
 streamlit
 tensorflow
-opencv-python-headless
 numpy
-Pillow
+pillow
+pytesseract
+opencv-python-headless
+

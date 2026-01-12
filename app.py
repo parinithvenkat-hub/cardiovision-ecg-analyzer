@@ -36,11 +36,12 @@ uploaded = st.file_uploader(
 
 if uploaded:
     image = Image.open(uploaded).convert("RGB")
-    st.image(image, caption="Uploaded ECG", width=400)
+st.image(image, caption="Uploaded ECG", width=400)
 
-    img = ImageOps.fit(image, (128, 128))
-    arr = np.array(img) / 255.0
-    arr = np.expand_dims(arr, axis=0)
+img = ImageOps.fit(image, (224, 224))   # 🔥 FIXED SIZE
+arr = np.array(img) / 255.0
+arr = np.expand_dims(arr, axis=0)       # (1, 224, 224, 3)
+
 
     preds = model.predict(arr)[0]
     labels = ["Normal", "Myocardial Infarction (MI)", "Post-MI"]

@@ -2,7 +2,11 @@ import streamlit as st
 import tensorflow as tf
 import numpy as np
 from PIL import Image, ImageOps
-import pytesseract
+try:
+    import pytesseract
+    OCR_AVAILABLE = True
+except:
+    OCR_AVAILABLE = False
 import re
 
 # ---------------- PAGE CONFIG ----------------
@@ -91,7 +95,11 @@ if uploaded:
 
     ecg_values = extract_ecg_values(image)
 
-    if ecg_values:
+   if ecg_values:
+elif not OCR_AVAILABLE:
+    st.warning(
+        "⚠️ OCR-based ECG value extraction is not supported on cloud hosting. "
+        "AI diagnosis is still valid."
         for k, v in ecg_values.items():
             st.write(f"**{k}:** {v}")
     else:

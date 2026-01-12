@@ -2,12 +2,6 @@ import streamlit as st
 import tensorflow as tf
 import numpy as np
 from PIL import Image, ImageOps
-try:
-    import pytesseract
-    OCR_AVAILABLE = True
-except:
-    OCR_AVAILABLE = False
-import re
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -17,7 +11,7 @@ st.set_page_config(
 )
 
 st.title("🫀 CardioVision: ECG Image Analyzer")
-st.write("Upload an ECG image to get AI-based diagnosis and report values")
+st.write("Upload an ECG image to get AI-based waveform diagnosis")
 
 # ---------------- MODEL LOADING ----------------
 loading_msg = st.info("🔄 Loading AI model, please wait...")
@@ -28,28 +22,7 @@ def load_model():
     return model
 
 model = load_model()
-loading_msg.empty()   # remove loading message
-
-# ---------------- OCR FUNCTION ----------------
-def extract_ecg_values(image):
-    text = pytesseract.image_to_string(image)
-
-    values = {}
-
-    patterns = {
-        "Heart Rate (HR)": r"(HR|Heart Rate)\s*[:\-]?\s*(\d+)",
-        "PR Interval (ms)": r"PR\s*[:\-]?\s*(\d+)",
-        "QRS Duration (ms)": r"QRS\s*[:\-]?\s*(\d+)",
-        "QT Interval (ms)": r"QT\s*[:\-]?\s*(\d+)",
-        "QTc (ms)": r"QTc\s*[:\-]?\s*(\d+)"
-    }
-
-    for key, pattern in patterns.items():
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            values[key] = match.group(2)
-
-    return values
+loading_msg.empty()
 
 # ---------------- FILE UPLOAD ----------------
 uploaded = st.file_uploader(
@@ -58,11 +31,11 @@ uploaded = st.file_uploader(
 )
 
 # ---------------- PROCESS IMAGE ----------------
-if uploaded:
+if uploaded is not None:
     image = Image.open(uploaded).convert("RGB")
     st.image(image, caption="Uploaded ECG", width=400)
 
-    # Resize for model
+    # Resize image to model input size
     img = ImageOps.fit(image, (224, 224))
     arr = np.array(img) / 255.0
     arr = np.expand_dims(arr, axis=0)
@@ -70,42 +43,49 @@ if uploaded:
     # Prediction
     preds = model.predict(arr)[0]
     labels = ["Normal", "Myocardial Infarction (MI)", "Post-MI"]
-    idx = np.argmax(preds)
+    idx = int(np.argmax(preds))
+    confidence = float(preds[idx]) * 100
 
     # ---------------- RESULTS ----------------
-    st.subheader("🧠 AI Diagnosis")
-    st.success(f"{labels[idx]} (Confidence: {preds[idx]*100:.2f}%)")
+    st.subheader("🧠 AI Waveform Diagnosis")
+
+    if idx == 0:
+        st.success(f"Normal ECG ({confidence:.2f}% confidence)")
+    else:
+        st.error(f"{labels[idx]} ({confidence:.2f}% confidence)")
 
     st.subheader("🩺 Medical Explanation")
+
     if idx == 0:
-        st.write("Normal sinus rhythm with no critical abnormalities detected.")
+        st.write(
+            "The ECG waveform shows a normal sinus rhythm with regular intervals "
+            "and no significant abnormalities."
+        )
     elif idx == 1:
         st.write(
-            "ECG patterns are suggestive of myocardial infarction. "
-            "This may include ST-segment deviations, abnormal Q waves, or T-wave changes."
+            "The ECG waveform indicates patterns consistent with myocardial infarction, "
+            "such as ST-segment deviations or abnormal Q waves."
         )
     else:
         st.write(
-            "ECG indicates post-myocardial infarction changes, "
-            "which may reflect previous cardiac injury or remodeling."
+            "The ECG waveform suggests post-myocardial infarction changes, "
+            "which may reflect previous cardiac injury or structural remodeling."
         )
 
-    # ---------------- OCR VALUES ----------------
-    st.subheader("📄 ECG Report Values (OCR)")
+    # ---------------- ECG VALUES SECTION ----------------
+    st.subheader("📄 ECG Parameters (HR, PR, QRS, QT, QTc)")
 
-    ecg_values = extract_ecg_values(image)
-
-   if ecg_values:
-elif not OCR_AVAILABLE:
     st.warning(
-        "⚠️ OCR-based ECG value extraction is not supported on cloud hosting. "
-        "AI diagnosis is still valid."
-        for k, v in ecg_values.items():
-            st.write(f"**{k}:** {v}")
-    else:
-        st.warning("⚠️ No readable ECG values found on this image.")
+        "⚠️ ECG numerical values such as Heart Rate (HR), PR interval, "
+        "QRS duration, QT/QTc, Axis, and RV5/SV1 are calculated by ECG machines "
+        "from raw signal data.\n\n"
+        "Scanned ECG images do not contain sufficient timing and voltage "
+        "information to compute these values accurately.\n\n"
+        "In this cloud-deployed version, the system focuses on AI-based "
+        "waveform classification. OCR-based report reading is supported "
+        "only in the local version."
+    )
 
 # ---------------- FOOTER ----------------
 st.markdown("---")
-st.caption("⚠️ OCR values are extracted from printed ECG reports, not computed from raw ECG signals.")
-st.caption("⚠️ Educational use only. Not a medical diagnosis.")
+st.caption("⚠️ Educational use only. Not a substitute for professional medical diagnosis.")

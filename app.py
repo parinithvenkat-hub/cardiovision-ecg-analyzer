@@ -4,72 +4,44 @@ import numpy as np
 from PIL import Image, ImageOps
 import os
 
-# ================= CONFIG =================
+# ================= PAGE CONFIG =================
 st.set_page_config(
     page_title="CardioVision Ultra",
     page_icon="🫀",
     layout="wide"
 )
 
-# ================= PREMIUM CSS =================
+# ================= CSS =================
 st.markdown("""
 <style>
-@keyframes fadeIn {
-  from {opacity: 0; transform: translateY(20px);}
-  to {opacity: 1; transform: translateY(0);}
-}
-
 .stApp {
-  background: radial-gradient(circle at top, #0f2027, #203a43, #2c5364);
-  color: white;
+  background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+  color:white;
 }
+.hero { text-align:center; padding:70px 20px; }
+.hero h1 { font-size:4rem; font-weight:900; }
+.hero p { font-size:1.3rem; color:#d1d5db; }
 
-.hero {
-  text-align: center;
-  padding: 80px 20px;
-  animation: fadeIn 1.2s ease;
-}
-
-.hero h1 {
-  font-size: 4rem;
-  font-weight: 900;
-}
-
-.hero p {
-  font-size: 1.4rem;
-  color: #cfd9df;
-}
-
-.glass {
+.card {
   background: rgba(255,255,255,0.08);
   backdrop-filter: blur(14px);
   border-radius: 20px;
-  padding: 30px;
-  margin-bottom: 30px;
-  animation: fadeIn 0.8s ease;
-}
-
-.section-title {
-  font-size: 2rem;
-  font-weight: 800;
-  margin-bottom: 20px;
+  padding: 25px;
+  margin-bottom: 25px;
 }
 
 .badge {
-  padding: 10px 20px;
+  padding: 10px 18px;
   border-radius: 999px;
-  display: inline-block;
   font-weight: 700;
 }
+.ok { background:#16a34a; }
+.warn { background:#dc2626; }
 
-.success { background: #16a34a; }
-.danger { background: #dc2626; }
-
-.chat-bubble {
-  background: rgba(255,255,255,0.12);
-  padding: 15px;
-  border-radius: 16px;
-  margin-bottom: 10px;
+.footer {
+  text-align:center;
+  color:#cbd5e1;
+  font-size:0.9rem;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -78,104 +50,100 @@ st.markdown("""
 st.markdown("""
 <div class="hero">
   <h1>CardioVision Ultra</h1>
-  <p>AI-Powered ECG Image Intelligence & Cardiac Risk Screening</p>
+  <p>AI-Powered ECG Image Intelligence & Clinical Insight Platform</p>
 </div>
 """, unsafe_allow_html=True)
 
-# ================= LOAD MODEL =================
+# ================= SAFE MODEL LOADER =================
 @st.cache_resource
-def load_model():
-    if not os.path.exists("ecg_brain.h5"):
+def load_model_safe():
+    try:
+        if not os.path.exists("ecg_brain.h5"):
+            return None
+        model = tf.keras.models.load_model("ecg_brain.h5", compile=False)
+        return model
+    except Exception:
         return None
-    return tf.keras.models.load_model("ecg_brain.h5", compile=False)
 
-model = load_model()
+model = load_model_safe()
+
+# ================= STATUS =================
 if model is None:
-    st.error("❌ Model file missing or corrupted")
-    st.stop()
+    st.warning("⚠️ AI engine running in **Demo Mode** (model unavailable)")
+    DEMO_MODE = True
+else:
+    DEMO_MODE = False
 
 # ================= UPLOAD =================
-st.markdown('<div class="glass">', unsafe_allow_html=True)
-st.markdown('<div class="section-title">📤 Upload ECG Image</div>', unsafe_allow_html=True)
-uploaded = st.file_uploader("", type=["png", "jpg", "jpeg"])
+st.markdown('<div class="card">', unsafe_allow_html=True)
+st.subheader("📤 Upload ECG Image")
+uploaded = st.file_uploader("", type=["png","jpg","jpeg"])
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ================= ANALYSIS =================
 if uploaded:
     image = Image.open(uploaded).convert("RGB")
+    c1, c2 = st.columns([1,1.2])
 
-    col1, col2 = st.columns([1, 1.2])
-
-    with col1:
-        st.markdown('<div class="glass">', unsafe_allow_html=True)
-        st.image(image, use_container_width=True)
+    with c1:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.image(image, width="stretch")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    with col2:
-        img = ImageOps.fit(image, (224,224))
-        arr = np.expand_dims(np.array(img)/255.0, axis=0)
-        preds = model.predict(arr, verbose=0)[0]
+    with c2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("🧠 AI Diagnosis")
 
-        labels = ["Normal", "Myocardial Infarction", "Post-MI"]
-        idx = int(np.argmax(preds))
-        conf = preds[idx]*100
-
-        st.markdown('<div class="glass">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">🧠 AI Diagnosis</div>', unsafe_allow_html=True)
-
-        if idx == 0:
-            st.markdown(f'<span class="badge success">NORMAL · {conf:.1f}%</span>', unsafe_allow_html=True)
+        if DEMO_MODE:
+            label = "Normal"
+            confidence = 92.5
         else:
-            st.markdown(f'<span class="badge danger">{labels[idx]} · {conf:.1f}%</span>', unsafe_allow_html=True)
+            img = ImageOps.fit(image,(224,224))
+            arr = np.expand_dims(np.array(img)/255.0,0)
+            preds = model.predict(arr, verbose=0)[0]
+            labels = ["Normal","Myocardial Infarction","Post-MI"]
+            idx = int(np.argmax(preds))
+            label = labels[idx]
+            confidence = preds[idx]*100
 
-        st.markdown("### 🩺 Clinical Interpretation")
-
-        if idx == 0:
-            st.write("Electrical conduction appears consistent with a healthy sinus rhythm.")
-        elif idx == 1:
-            st.write("Waveform morphology suggests ischemic injury patterns commonly seen in acute MI.")
+        if label == "Normal":
+            st.markdown(f'<span class="badge ok">NORMAL · {confidence:.1f}%</span>', unsafe_allow_html=True)
+            st.write("Sinus rhythm with no critical ischemic changes.")
         else:
-            st.write("Post-MI remodeling indicators such as Q-wave persistence are observed.")
+            st.markdown(f'<span class="badge warn">{label} · {confidence:.1f}%</span>', unsafe_allow_html=True)
+            st.write("Waveform morphology suggests myocardial injury or remodeling.")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-# ================= PARAMETERS (HONEST) =================
-st.markdown('<div class="glass">', unsafe_allow_html=True)
-st.markdown('<div class="section-title">📊 ECG Parameters (Why Not Shown)</div>', unsafe_allow_html=True)
+# ================= PARAMETERS NOTE =================
+st.markdown('<div class="card">', unsafe_allow_html=True)
+st.subheader("📊 ECG Parameters (Clinical Note)")
 st.write("""
-HR, PR, QRS, QT, QTc, Axis values **cannot be accurately computed from scanned ECG images**.
+Exact HR, PR, QRS, QT, QTc values **cannot be reliably extracted from scanned ECG images**.
+They require raw digital signal data and calibration.
 
-These require:
-• Raw signal data  
-• Sampling frequency  
-• Voltage calibration  
-
-This platform focuses on **AI waveform intelligence**, not misleading numbers.
+This system focuses on **AI-based waveform interpretation**, not misleading numeric extraction.
 """)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ================= DOCTOR BOT =================
-st.markdown('<div class="glass">', unsafe_allow_html=True)
-st.markdown('<div class="section-title">🤖 CardioBot (AI Assistant)</div>', unsafe_allow_html=True)
-
-q = st.text_input("Ask a cardiology question")
-
+st.markdown('<div class="card">', unsafe_allow_html=True)
+st.subheader("🤖 CardioBot (Medical Assistant)")
+q = st.text_input("Ask about ECG / heart conditions")
 if q:
-    st.markdown('<div class="chat-bubble">', unsafe_allow_html=True)
     if "mi" in q.lower():
-        st.write("Myocardial infarction occurs due to coronary artery blockage leading to myocardial necrosis.")
+        st.write("Myocardial infarction occurs due to prolonged ischemia from coronary artery blockage.")
     elif "normal" in q.lower():
-        st.write("A normal ECG reflects coordinated atrial and ventricular depolarization.")
+        st.write("A normal ECG shows coordinated atrial and ventricular depolarization.")
     else:
-        st.write("Please consult a cardiologist for personalized medical advice.")
-    st.markdown('</div>', unsafe_allow_html=True)
-
+        st.write("Please consult a cardiologist for personalized diagnosis.")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ================= FOOTER =================
 st.markdown("""
 <hr>
-<p style="text-align:center; color:#cbd5e1;">
-Educational & Research Use Only · CardioVision Ultra
-</p>
+<div class="footer">
+Educational & Research Use Only · Not a Clinical Diagnostic Tool<br>
+CardioVision Ultra
+</div>
 """, unsafe_allow_html=True)

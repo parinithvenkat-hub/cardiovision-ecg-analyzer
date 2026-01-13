@@ -2,91 +2,44 @@ import os
 import streamlit as st
 import tensorflow as tf
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image
 
-# ==============================
-# PAGE CONFIG
-# ==============================
+# ---------------- CONFIG ----------------
 st.set_page_config(
-    page_title="CardioVision Ultra | ECG Intelligence",
+    page_title="CardioVision Ultra",
     page_icon="🫀",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
-# ==============================
-# CUSTOM CSS (PRO UI)
-# ==============================
+# ---------------- STYLE ----------------
 st.markdown("""
 <style>
-html, body, [class*="css"]  {
-    font-family: 'Segoe UI', sans-serif;
-}
-
-.main {
+body {
     background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-    color: white;
 }
-
-h1, h2, h3 {
-    color: #ffffff;
-    font-weight: 600;
+.big-title {
+    font-size: 48px;
+    font-weight: 700;
 }
-
-.block {
-    background: rgba(255,255,255,0.05);
-    padding: 25px;
-    border-radius: 14px;
-    margin-bottom: 25px;
+.subtitle {
+    font-size: 18px;
+    opacity: 0.85;
 }
-
-.metric {
-    background: rgba(255,255,255,0.08);
-    padding: 15px;
-    border-radius: 12px;
-    text-align: center;
-}
-
-.footer {
-    text-align:center;
-    opacity:0.6;
-    font-size:13px;
+.card {
+    background-color: #111827;
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 0 30px rgba(0,0,0,0.4);
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ==============================
-# SIDEBAR
-# ==============================
-st.sidebar.title("🫀 CardioVision Ultra")
-st.sidebar.caption("AI ECG Intelligence Platform")
+# ---------------- HEADER ----------------
+st.markdown('<div class="big-title">🫀 CardioVision Ultra</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">AI-Powered ECG Image Classification System</div>', unsafe_allow_html=True)
+st.markdown("---")
 
-st.sidebar.markdown("### Features")
-st.sidebar.markdown("""
-✔ ECG Image Analysis  
-✔ AI Diagnosis  
-✔ Clinical Parameter Estimation  
-✔ Medical Explanation  
-✔ Doctor Bot  
-""")
-
-st.sidebar.warning(
-    "Educational use only.\nNot a substitute for clinical diagnosis."
-)
-
-# ==============================
-# HEADER
-# ==============================
-st.markdown("""
-<div class="block">
-<h1>CardioVision Ultra</h1>
-<p>AI-Powered ECG Image Intelligence & Cardiac Risk Screening</p>
-</div>
-""", unsafe_allow_html=True)
-
-# ==============================
-# MODEL LOADER (SAFE)
-# ==============================
+# ---------------- LOAD MODEL ----------------
 @st.cache_resource
 def load_model():
     if not os.path.exists("ecg_brain.h5"):
@@ -99,109 +52,71 @@ def load_model():
 model = load_model()
 
 if model is None:
-    st.error("⚠️ AI model not available. Demo mode enabled.")
-    demo_mode = True
-else:
-    demo_mode = False
+    st.error("❌ Model file missing or corrupted (`ecg_brain.h5`).")
+    st.stop()
 
-# ==============================
-# UPLOAD
-# ==============================
-st.markdown("<div class='block'><h2>Upload ECG Image</h2></div>", unsafe_allow_html=True)
-
+# ---------------- UPLOAD ----------------
+st.markdown("### 📤 Upload ECG Image")
 uploaded = st.file_uploader(
-    "Supported formats: PNG, JPG, JPEG",
+    "PNG / JPG only",
     type=["png", "jpg", "jpeg"]
 )
 
-if uploaded:
-    image = Image.open(uploaded).convert("RGB")
-    st.image(image, caption="Uploaded ECG", width=600)
+if uploaded is None:
+    st.info("⬆️ Please upload an ECG image to start analysis.")
+    st.stop()
 
-    # ==============================
-    # AI DIAGNOSIS
-    # ==============================
-    st.markdown("<div class='block'><h2>AI Diagnosis</h2></div>", unsafe_allow_html=True)
+# ---------------- IMAGE PROCESS ----------------
+image = Image.open(uploaded).convert("RGB")
+st.image(image, caption="Uploaded ECG", width=420)
 
-    if not demo_mode:
-        img = ImageOps.fit(image, (224, 224))
-        arr = np.array(img) / 255.0
-        arr = np.expand_dims(arr, axis=0)
+IMG_SIZE = 224  # MUST match training
+img = image.resize((IMG_SIZE, IMG_SIZE))
+arr = np.array(img).astype("float32") / 255.0
+arr = np.expand_dims(arr, axis=0)
 
-        preds = model.predict(arr)[0]
-        labels = ["Normal", "Myocardial Infarction", "Post-MI"]
-        idx = int(np.argmax(preds))
-        confidence = preds[idx] * 100
-    else:
-        idx = 1
-        confidence = 88.6
+# ---------------- PREDICTION ----------------
+preds = model.predict(arr, verbose=0)[0]
 
-    diagnosis = ["Normal", "Myocardial Infarction", "Post-MI"][idx]
+labels = [
+    "Normal",
+    "Myocardial Infarction",
+    "Post-MI"
+]
 
-    st.success(f"**{diagnosis}**  |  Confidence: **{confidence:.2f}%**")
+idx = int(np.argmax(preds))
+confidence = float(preds[idx]) * 100
 
-    # ==============================
-    # ECG PARAMETERS (ESTIMATED)
-    # ==============================
-    st.markdown("<div class='block'><h2>ECG Parameters (Clinical Estimate)</h2></div>", unsafe_allow_html=True)
+# ---------------- RESULT ----------------
+st.markdown("---")
+st.markdown("## 🧠 AI Diagnosis")
 
-    cols = st.columns(4)
-    metrics = {
-        "Heart Rate": "72–110 bpm",
-        "PR Interval": "120–200 ms",
-        "QRS Duration": "90–130 ms",
-        "QT / QTc": "360–470 ms",
-        "P Axis": "0° to +75°",
-        "QRS Axis": "-30° to +90°",
-        "T Axis": "15° to 75°",
-        "RV5 / SV1": ">35 mm (LVH indicator)"
-    }
+st.success(f"**{labels[idx]}** — Confidence: **{confidence:.2f}%**")
 
-    i = 0
-    for k, v in metrics.items():
-        cols[i % 4].markdown(f"<div class='metric'><b>{k}</b><br>{v}</div>", unsafe_allow_html=True)
-        i += 1
+# ---------------- MEDICAL EXPLANATION ----------------
+st.markdown("## 🩺 Medical Interpretation")
 
-    # ==============================
-    # MEDICAL EXPLANATION
-    # ==============================
-    st.markdown("<div class='block'><h2>Medical Interpretation</h2></div>", unsafe_allow_html=True)
-
-    if idx == 0:
-        st.write("""
-Normal sinus rhythm with no significant ST-T changes or conduction abnormalities.
-Overall ECG morphology is within physiological limits.
-""")
-    elif idx == 1:
-        st.write("""
-ECG features suggest myocardial infarction, including ST-segment deviation
-and abnormal QRS morphology, indicating possible myocardial injury.
-Immediate cardiology consultation is advised.
-""")
-    else:
-        st.write("""
-ECG findings are consistent with post-myocardial infarction changes,
-including residual repolarization abnormalities and altered ventricular conduction.
+if idx == 0:
+    st.write("""
+• Normal sinus rhythm  
+• No pathological ST-segment changes  
+• No abnormal Q-waves detected  
 """)
 
-    # ==============================
-    # DOCTOR BOT
-    # ==============================
-    st.markdown("<div class='block'><h2>Doctor Bot</h2></div>", unsafe_allow_html=True)
+elif idx == 1:
+    st.write("""
+• ST-segment elevation / depression patterns detected  
+• Possible pathological Q-waves  
+• Suggestive of myocardial tissue injury  
+""")
 
-    question = st.text_input("Ask a question about ECG or heart conditions")
+else:
+    st.write("""
+• Residual ECG abnormalities  
+• Scar-related electrical changes  
+• Seen after previous myocardial infarction  
+""")
 
-    if question:
-        st.info(
-            "Based on ECG patterns, consult a cardiologist for clinical correlation. "
-            "This AI assists interpretation but does not replace expert diagnosis."
-        )
-
-# ==============================
-# FOOTER
-# ==============================
-st.markdown("""
-<div class="footer">
-Educational & Research Use Only • CardioVision Ultra
-</div>
-""", unsafe_allow_html=True)
+# ---------------- DISCLAIMER ----------------
+st.markdown("---")
+st.warning("⚠️ Educational use only. Not a substitute for clinical diagnosis.")

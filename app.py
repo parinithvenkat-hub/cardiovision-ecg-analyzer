@@ -2,6 +2,7 @@ import streamlit as st
 import tensorflow as tf
 import numpy as np
 from PIL import Image, ImageOps
+import os
 
 # ===================== PAGE CONFIG =====================
 st.set_page_config(
@@ -41,10 +42,16 @@ st.markdown("---")
 # ===================== LOAD MODEL =====================
 @st.cache_resource
 def load_model():
+    if not os.path.exists("ecg_brain.h5"):
+        return None
     return tf.keras.models.load_model("ecg_brain.h5", compile=False)
 
 with st.spinner("🔄 Initializing AI model..."):
     model = load_model()
+
+if model is None:
+    st.error("❌ Model file missing or corrupted (ecg_brain.h5)")
+    st.stop()
 
 # ===================== UPLOAD SECTION =====================
 st.subheader("📤 Upload ECG Image")
@@ -70,38 +77,60 @@ if uploaded is not None:
         arr = np.expand_dims(arr, axis=0)
 
         preds = model.predict(arr)[0]
-        labels = ["Normal", "Myocardial Infarction (MI)", "Post-MI"]
-        idx = int(np.argmax(preds))
-        confidence = preds[idx] * 100
 
-        if idx == 0:
-            st.success(f"✅ **Normal ECG**")
+        normal_prob = float(preds[0])
+        mi_prob = float(preds[1])
+
+        # ===================== OPTION-C ARTIFICIAL MAPPING =====================
+        if mi_prob < 0.30:
+            diagnosis = "Normal ECG"
+            color = "success"
+            explanation = (
+                "The ECG waveform is consistent with a **normal sinus rhythm** "
+                "and shows no clinically significant abnormalities."
+            )
+
+        elif 0.30 <= mi_prob < 0.55:
+            diagnosis = "Abnormal ECG"
+            color = "warning"
+            explanation = (
+                "The ECG shows **non-specific abnormalities** that may indicate "
+                "early ischemic changes or rhythm irregularities. "
+                "Clinical correlation is advised."
+            )
+
+        elif 0.55 <= mi_prob < 0.80:
+            diagnosis = "Post-Myocardial Infarction Changes"
+            color = "warning"
+            explanation = (
+                "The ECG demonstrates **post-MI patterns**, which may reflect "
+                "previous cardiac injury, ventricular remodeling, or scar tissue."
+            )
+
         else:
-            st.error(f"⚠️ **{labels[idx]} Detected**")
+            diagnosis = "Acute Myocardial Infarction"
+            color = "error"
+            explanation = (
+                "The ECG exhibits **strong ischemic patterns** such as ST-segment "
+                "deviation or pathological Q-waves, consistent with "
+                "**acute myocardial infarction**."
+            )
+
+        # ===================== DISPLAY RESULT =====================
+        if color == "success":
+            st.success(f"✅ **{diagnosis}**")
+        elif color == "warning":
+            st.warning(f"⚠️ **{diagnosis}**")
+        else:
+            st.error(f"🚨 **{diagnosis}**")
 
         st.metric(
-            label="Model Confidence",
-            value=f"{confidence:.2f}%"
+            label="Model Confidence (MI Probability)",
+            value=f"{mi_prob * 100:.2f}%"
         )
 
         st.markdown("### 🩺 Medical Interpretation")
-
-        if idx == 0:
-            st.write(
-                "The ECG waveform demonstrates a **normal sinus rhythm** "
-                "with no clinically significant abnormalities."
-            )
-        elif idx == 1:
-            st.write(
-                "The ECG image exhibits waveform patterns consistent with "
-                "**myocardial infarction**, such as abnormal Q waves or "
-                "ST-segment deviations."
-            )
-        else:
-            st.write(
-                "The ECG indicates **post-myocardial infarction changes**, "
-                "which may reflect previous cardiac injury or structural remodeling."
-            )
+        st.write(explanation)
 
     # ===================== ECG PARAMETERS INFO =====================
     st.markdown("---")
@@ -109,19 +138,16 @@ if uploaded is not None:
 
     st.warning(
         "Numerical ECG parameters such as **Heart Rate (HR), PR Interval, "
-        "QRS Duration, QT/QTc, Axis, RV5/SV1** are calculated by ECG machines "
-        "using **raw electrical signal data**.\n\n"
-        "Scanned ECG images do not contain accurate timing and voltage "
-        "information to compute these parameters reliably.\n\n"
-        "**Therefore, this system focuses on AI-based waveform classification.**"
+        "QRS Duration, QT/QTc, Axis, RV5/SV1** require **raw ECG signal data**.\n\n"
+        "Scanned ECG images do not contain accurate time-voltage information.\n\n"
+        "**This system focuses on AI-based waveform classification only.**"
     )
 
 # ===================== FOOTER =====================
 st.markdown("---")
 st.markdown(
     "<p style='text-align: center; color: grey;'>"
-    "⚠️ For educational and research purposes only | "
-    "Developed using Deep Learning & Computer Vision"
+    "⚠️ Educational & research use only | CardioVision AI"
     "</p>",
     unsafe_allow_html=True
 )
